@@ -1,7 +1,7 @@
 author: xian6060 (林芝嫻)
 date: 2026-03-05
 question: |
-  假設此時 Host 發出一個讀取請求，但目前 CMT 已滿，且發生 Cache Miss，而在CMT中準備被替換掉的 victim entry 是 dirty。
+  假設此時 Host 發出一個讀取請求，但目前 CMT 已滿，且發生 Cache Miss，而在 CMT 中準備被替換掉的 victim entry 是 dirty 狀態。
   請問要完成這筆讀取，NAND Flash 要執行哪些物理操作？
 options:
   - text: "1 次讀取操作"

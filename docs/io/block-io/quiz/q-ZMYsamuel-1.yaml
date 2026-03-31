@@ -1,0 +1,21 @@
+author: ZMYsamuel
+date: 2026-03-31
+question: |
+  某公司開發了一套全新的 in-memory database，由於資料量增加，開始將部分資料下放到 NVMe SSD。該系統主要的工作負載是密集的 **random 4KB read**。
+  目前系統採用 **synchronous I/O**，並且依賴裝置完成 I/O 後發送 **interrupt** 來通知 CPU。
+  在系統上線後，工程師發現雖然 SSD 標示的 IOPS 很高，但實際達到的 IOPS 卻不如預期，且 CPU 使用率極高。透過 profiling 發現大量 CPU 時間花費在 `thread scheduling`、`context switch` 以及 `interrupt handler` 的執行上。
+  為了最大化系統的 IOPS 並降低不必要的 CPU 開銷，下列哪一種系統架構調整策略最為合理？
+options:
+  - text: "改用 asynchronous I/O 搭配 polling 機制來處理 I/O 完成的通知。"
+    correct: true
+    explanation: |
+      這是最合理的做法。在 NVMe SSD 的環境下，I/O latency 極低（微秒等級）。使用 **asynchronous I/O** 可以避免大量 thread 因等待 I/O 而造成的 `context switch` 開銷；而在此高 IOPS 密度的場景下，改用 **polling** 可以避免裝置頻繁發送 interrupt 造成的 interrupt storm，進一步減少 `context switch` 與 `interrupt handler` 的負擔，從而提升整體效能與實際 IOPS。
+  - text: "維持 synchronous I/O，但改用 polling 機制來等待 I/O 完成。"
+    explanation: |
+      這個選項雖然透過 **polling** 減少了 interrupt delivery 的開銷，但由於依然使用 **synchronous I/O**，每個 I/O 請求仍會 block 住發出請求的 thread。為了維持高併發量，系統仍需要建立與維持大量的 thread，這會導致極高的 `thread scheduling` 與 `context switch` 成本，無法有效解決 CPU 被大量浪費的問題。
+  - text: "改用 asynchronous I/O，並維持使用 interrupt 來接收 I/O 完成的通知。"
+    explanation: |
+      雖然改用 **asynchronous I/O** 確實可以解決 thread blocking 與 `context switch` 的問題，但在 NVMe SSD 高 IOPS 的環境下，每秒可能產生數十萬次的 I/O completion。如果繼續依賴 **interrupt**，CPU 依然會花費大量時間在處理 `interrupt handler`（即 interrupt storm），因此這並非降低 CPU 開銷的最佳完整策略。
+  - text: "將 database 的讀取單位從 4KB 加大到 256KB，以充分利用 NVMe SSD 的 bandwidth。"
+    explanation: |
+      這是一個常見的誤解。Database 的 random point lookup 瓶頸在於 **IOPS** 而非 **bandwidth**。強制將讀取單位放大到 256KB 不僅無法解決 `context switch` 與 interrupt storm 的 CPU 開銷問題，反而會因為讀取大量無用資料而浪費系統資源與 I/O bandwidth。

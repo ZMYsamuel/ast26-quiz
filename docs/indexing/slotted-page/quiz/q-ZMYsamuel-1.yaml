@@ -1,0 +1,20 @@
+author: ZMYsamuel
+date: 2026-03-31
+question: |
+  在採用 PostgreSQL 的資料庫時，某個 8 KB 的 heap page 內部剩餘的連續可用空間（亦即 `pd_lower` 與 `pd_upper` 之間的距離）僅剩下 20 bytes。
+  此時，應用程式對該 page 內的某筆 variable-length record 執行了一次 `UPDATE` 操作，將其 `VARCHAR` 欄位的內容大幅縮減，使得更新後的新版本 record 比舊版本足足小了 100 bytes。假設目前系統中還有其他 transaction 正在執行，且尚未觸發任何背景的 VACUUM 清理程序。
+  針對此次 `UPDATE` 操作發生後該 page 的內部狀態變化，下列敘述何者最為正確？
+options:
+  - text: "由於剩餘空間不足以容納新版 record 與對應的新 slot，新版本 record 無法寫入此 page，必須被配置到其他有足夠空間的 page 中。"
+    correct: true
+    explanation: |
+      在 PostgreSQL 的設計中，`UPDATE` 操作等同於「標記舊版本為刪除」加上「插入新版本」。為了支援多版本並發控制，舊版本必須保留給其他潛在的 transaction 讀取，因此不能立刻回收其佔用的空間。插入新版本需要分配一個全新的 4 bytes slot（推進 `pd_lower`）以及寫入新 record 資料（推進 `pd_upper`）。即使新版本體積較小，但因為這兩筆空間都必須從現有的 20 bytes 連續 free space 中扣除，空間依然不足，因此只能寫入到別的 page。
+  - text: "系統會直接在舊版本 record 原本佔用的實體位置進行 in-place update，並將多出來的 100 bytes 標記為 page 內部的 hole 供未來使用。"
+    explanation: |
+      這是一個常見的錯誤認知。雖然新紀錄較小，似乎可以放進原本的空間，但因為系統必須保留舊版本以供其他尚未結束的 transaction 讀取，所以絕對不能直接覆寫（in-place update）舊資料。
+  - text: "系統會立刻對該 page 觸發 compaction，強制回收舊版本 record 的空間以取得 100 bytes 的連續可用空間，確保新紀錄能保存在同一個 page 中以維持 index 的 locality。"
+    explanation: |
+      這違背了 slotted page 運作原理。Compaction 的前提是「回收那些已經確認沒有任何人需要的舊 record」，但題目明示系統中還有其他 transaction 正在執行，代表舊紀錄仍可能被讀取。在這種情況下，系統不能強制回收它的空間，因此無法透過 compaction 擠出空間給新紀錄。
+  - text: "系統會在 slot array 的末端新增一個 slot 來指向新版本 record，但為了節省空間，會將該 record 拆分成兩半，前 16 bytes 塞入剩下的連續空間，剩餘部分則寫入溢位分頁。"
+    explanation: |
+      Slotted page 本身的設計單位是單一完整的 record，page header 內的 metadata（如 `pd_lower` 與 `pd_upper`）與 slot 所記錄的 offset 與 length 並沒有內建將單一 record 在 heap area 切割成多個不連續區塊的機制。資料庫不會將普通的 record 零碎地填補在 free space 中。

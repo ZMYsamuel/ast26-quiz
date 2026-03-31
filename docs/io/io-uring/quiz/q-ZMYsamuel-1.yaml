@@ -1,0 +1,19 @@
+author: ZMYsamuel
+date: 2026-03-31
+question: |
+  某資料庫開發團隊為了追求極致的 I/O 效能，決定將底層儲存升級為 Zoned Namespace (ZNS) NVMe SSD。他們希望應用程式能夠直接發送 zone management command 給硬體，並且完全消除 Linux block layer 中 I/O scheduler 進行 reordering 與 merging 所帶來的額外 overhead。
+  然而，團隊發現若是僅依賴傳統的 `io_uring` 搭配 `SQPOLL` 或 `IOPOLL`，依然無法發送這些硬體特有的指令。根據 `io_uring` 的架構設計，下列哪一種解決方案最符合該團隊的需求？其伴隨的代價為何？
+options:
+  - text: "使用 `io_uring_cmd` 進行 NVMe Passthrough。這允許應用程式直接向 NVMe driver 發送包含 zone management 在內的 raw command，但代價是必須自行管理 DMA buffer 且失去 file system 提供的便利功能。"
+    correct: true
+    explanation: |
+      這是正確的。根據 `io_uring` 的設計，預設的 I/O 路徑仍然會經過 Linux 的 block layer。若要發送 ZNS SSD 特有的 zone management command 並完全繞過 block layer 的 overhead，必須使用 `io_uring_cmd` 來發送 passthrough command。其代價是必須自行處理底層細節，且無法使用 file system 與 encryption 等便利功能。
+  - text: "同時開啟 `SQPOLL` 與 `IOPOLL` 模式。這能建立一條沒有 system call 與 interrupt 的極致 I/O 路徑，從而自動繞過 block layer 並支援所有 NVMe 擴充指令。"
+    explanation: |
+      這是一個常見的誤解。雖然同時開啟 `SQPOLL` 與 `IOPOLL` 確實可以消除 submit 端的 syscall 與 completion 端的 interrupt，但預設的 I/O 請求本質上依然會經過 Linux 的 block layer，因此無法藉此發送 block layer 不支援的 ZNS 特殊指令。
+  - text: "在設定 `io_uring` 時強制啟用 `O_DIRECT` 旗標。這會讓 kernel 完全繞過 page cache 與 block layer，讓 application 可以直接將特定指令寫入裝置的 `CQ` 中。"
+    explanation: |
+      這個觀念有誤。`O_DIRECT` 主要是用來繞過作業系統的 page cache，但 I/O 請求依然會往下傳遞至 block layer 進行處理。此外，`CQ`（Completion Queue）是 kernel 用來通知應用程式 I/O 結果的機制，應用程式並不能將指令寫入 `CQ` 來控制硬體裝置。
+  - text: "增加 `SQE` 的 batch size 並透過單次 `io_uring_enter` 提交。透過 batched submission 可以將特規的 ZNS command 夾帶在一般的 read/write payload 中欺騙 block layer 放行。"
+    explanation: |
+      這是錯誤的推理。Batched submission 只是為了減少 `io_uring_enter` syscall 的呼叫次數以降低 overhead，並不能改變 `SQE` 的資料結構去夾帶特規指令。任何經過 block layer 的指令都必須符合其規範，無法透過 batching 來繞過限制。

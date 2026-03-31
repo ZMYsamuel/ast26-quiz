@@ -9,7 +9,7 @@ options:
   - text: "SPDK 採用 share-nothing 架構，為每個 worker thread 分配專屬的 NVMe queue pair 並結合 io_uring 機制，達成 lockless 設計。"
     explanation: |
       雖然 SPDK 強調 share-nothing 與 lockless，但它屬於 kernel bypass 技術，設計目標是完全繞過 kernel；而 `io_uring` 仍然是基於 kernel space 的非同步優化機制，兩者在架構路徑上是互斥的。
-  - text: "當 NVMe SSD 的 I/O latency 降至 $10-20\ \mu\text{s}$ 時，傳統 interrupt 的固定 overhead 佔比顯著提升，SPDK 透過 polling 消除 context switch 與 IRQ 處理負擔。"
+  - text: "當 NVMe SSD 的 I/O latency 降至 10-20 微秒時，傳統 interrupt 的固定 overhead 佔比顯著提升，SPDK 透過 polling 消除 context switch 與 IRQ 處理負擔。"
     explanation: |
       在高速 NVMe 環境下，interrupt 產生的開銷（如 context switch 與核心態切換）可能佔用高達 15-30% 的處理時間。雖然 polling 會導致 CPU 持續處於 busy-wait 狀態，但它消除了非必要的非同步中斷開銷，顯著提升處理單一 I/O 的效率。
     correct: true

@@ -10,7 +10,7 @@ options:
   - text: "企業級 SSD 的 28% OP 專門用來將 FTL 的全域 mapping table pin 在內部。在 steady state 時，由於 mapping table 完全不需要在寫入時同步更新至外部 NAND flash，徹底消除了因為 Read-Modify-Write 造成的 latency spike。"
     explanation: |
       OP 空間是開放給 GC 靈活運用的隱藏 NAND flash 容量，用來吸收寫入與優化垃圾回收效率。FTL 的 mapping table 主要是存放在 SSD 的內建 DRAM 或藉由 HMB (Host Memory Buffer) 存放於系統記憶體中，並非將龐大的 OP 空間浪費在 pin mapping table 上。
-  - text: "steady state 中出現的 tail latency spike，主要是因為 OS page cache 預設採用 write-back caching 機制，導致 dirty page 會以不可預測的巨大 batch 一次性 flush 到硬碟。只要透過 `fsync()` 強制程式改為 synchronous I/O 模式，即可讓寫入直接下到硬碟，進而消除底層硬體GC 造成的 tail latency。"
+  - text: "steady state 中出現的 tail latency spike，主要是因為 OS page cache 預設採用 write-back caching 機制，導致 dirty page 會以不可預測的巨大 batch 一次性 flush 到硬碟。只要透過 `fsync()` 強制程式改為 synchronous I/O 模式，即可讓寫入直接下到硬碟，進而消除底層硬體 GC 造成的 tail latency。"
     explanation: |
       頻繁呼叫 `fsync()` 會失去來自 OS page cache 延遲波動的 smoothing 功能，迫使程式進入 blocking state 等待硬體完成操作。在 steady state 下，這反而會讓程式直接受限於 NAND 底層動輒數毫秒的物理抹除延遲，進而惡化觀測到的 tail latency。
   - text: "為了緩解 steady state 下的 tail latency，企業級 SSD 廣泛依賴 background GC 在系統閒置時主動回收空間。因此在 OLTP 這類持續高負載的環境中，只要有 28% 的 OP 搭配 background GC，就能完全避免寫入時觸發 GC，使 p99 延遲永遠保持與 fresh state 一致。"

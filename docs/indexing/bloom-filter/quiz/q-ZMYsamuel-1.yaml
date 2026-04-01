@@ -1,24 +1,18 @@
 author: ZMYsamuel
 date: 2026-03-31
 question: |
-  某個分散式儲存系統為了減少不必要的 disk I/O，為每個 SSTable 實作了標準的 Bloom filter。目前系統每個 Bloom filter 預計儲存 $n = 1,000,000$ 個元素，並設定 $m/n = 10$（即平均每個元素分配 10 bits），因此整體 bit array 大小約為 1.14 MB，此時的最佳 hash function 數量 $k \approx 7$，且 false positive rate (FPR) 約為 1%。
-
-  隨著系統演進，迎來了兩大架構與需求變更：
-  1. 為了支援安全的資料刪除操作，團隊決定將底層資料結構從標準的 Bloom filter 升級為 **counting Bloom filter**（每個位置使用 4 bits 的計數器）。
-  2. 為了進一步壓低 disk read 的浪費，工程師決定將目標 FPR 降至大約 0.03%，根據公式與經驗法則，團隊將 $m/n$ 的比例從 10 提升至 15（並配合調整了對應的最佳 $k$ 值）。
-
-  請問在同時實作這兩項變更後，該過濾器所需的記憶體空間將發生什麼變化？且其操作特性會有何本質上的改變？
+  在一座使用 LSM-Tree 架構的儲存系統中，工程師發現現有的 Bloom filter（設定 $m/n = 10, k = 7, FPR \approx 0.82\%$）在處理特定 workload 時，仍產生過多不必要的 disk read。為了優化效能，團隊計畫將 $m/n$ 提升至 15（並配合調整最佳 $k$ 值），同時有成員提議為了支援過期資料的清理，應直接將對應的 bit 設為 0 以實現刪除功能。根據 Bloom filter 的設計邏輯，下列敘述何者最精確？
 options:
-  - text: "記憶體使用量會變為原來的 6 倍（約 6.84 MB），且系統能安全地執行刪除操作而不引發 false negative。"
+  - text: "記憶體空間將增加 1.5 倍，FPR 會大幅下降至約 0.03%（約 27 倍），但手動將 bit 設為 0 會導致系統產生 false negative。"
     correct: true
     explanation: |
-      這是正確的計算與觀念。原本標準 Bloom filter 的空間為 $10n$ bits。升級後，$m/n$ 提升至 15，代表位置數量變成 $15n$；同時改用 counting Bloom filter，每個位置從 1 bit 變為 4 bits。因此總空間需求變成 $15n \times 4 = 60n$ bits，剛好是原本 $10n$ bits 的 6 倍。此外，標準 Bloom filter 若強制將 bit 設回 0 會誤刪其他元素的紀錄而導致 false negative（告訴你不在但其實在），改用 counting Bloom filter 則透過計數器遞減解決了這個可能造成資料遺失的災難性問題。
-  - text: "記憶體使用量會變為原來的 1.5 倍（約 1.71 MB），且系統雖然支援刪除，但在頻繁刪除後 false positive rate 會逐漸惡化。"
+      根據大抄，$m/n$ 從 10 增加到 15 會使記憶體用量增加 50%，而 FPR 會從 0.82% 顯著降至 0.03%，展現極佳的過濾效率提升。然而，標準 Bloom filter 不支援刪除操作，因為多個元素的 hash 位置可能重疊。若強制將 bit 設為 0，可能會清掉其他元素共享的 bit，導致本來存在的元素被誤判為不存在，即產生 false negative，這在儲存系統中等同於資料遺失。
+  - text: "記憶體空間將增加 6 倍，且雖然 FPR 會降至 0.03%，但標準 Bloom filter 在執行刪除操作後會導致 FPR 逐漸惡化。"
     explanation: |
-      這個選項的計算邏輯錯誤。雖然它正確考慮了 $m/n$ 從 10 增加到 15 會帶來 1.5 倍的陣列長度增長，卻完全忽略了 counting Bloom filter 的每個計數器需要耗費 4 bits 的儲存空間（這會帶來額外 4 倍的增長）。因此空間總體應為 6 倍而非 1.5 倍。
-  - text: "記憶體使用量會變為原來的 4 倍（約 4.56 MB），且為了解決標準 Bloom filter 刪除時容易造成的 false positive 問題，系統才必須引入計數器。"
+      記憶體增加 6 倍是升級為 counting Bloom filter（每個位置 4 bits）後的計算結果，僅提升 $m/n$ 比例至 15 只會帶來 1.5 倍的空間增長。此外，標準 Bloom filter 刪除 bit 的核心風險是導致 false negative，而非僅是 FPR 的惡化。
+  - text: "記憶體空間將增加 1.5 倍，但根據 diminishing return 原則，FPR 從 $m/n = 10$ 提升至 15 的改善幅度微乎其微，不建議此更動。"
     explanation: |
-      這個選項包含了兩個核心錯誤。第一，在空間計算上漏掉了 $m/n$ 比例提升至 15 所帶來的 1.5 倍影響。第二，標準 Bloom filter 強制刪除位元所造成的嚴重後果是 **false negative**（本來存在的元素被誤判為不存在，導致資料遺失），而不是 false positive，這是 Bloom filter 應用中最常見的致命誤解。
-  - text: "記憶體使用量會變為原來的 6 倍（約 6.84 MB），且為了支援計數器的讀寫機制，每次查詢所需要的 random memory access 次數也會跟著增加 4 倍。"
+      這是對 diminishing return 的誤解。大抄指出從 $m/n = 10$ 增加到 15 時，FPR 會大幅下降約 27 倍，這仍屬於高效益的優化區間。真正的 diminishing return 是在 $m/n$ 超過 15（例如從 15 增加到 20）之後，FPR 的降幅才會顯著變小，不再具備明顯的記憶體投資報酬率。
+  - text: "記憶體空間將增加 1.5 倍，且若將 bit 設為 0 來執行刪除，會因為 hash 碰撞導致本來不存在的元素被誤判為存在，產生嚴重的 false positive。"
     explanation: |
-      前半段的記憶體空間計算 6 倍是正確的，但後半段觀念錯誤。每次查詢 Bloom filter 所需的 random memory access 次數是由 hash function 的數量 $k$ 決定的，與底層 bucket 的大小（1 bit 或 4 bits）無關。雖然 $m/n$ 變成 15 會讓最佳的 $k$ 值有些許增加（約從 7 增至 10），但存取次數絕不會因為位元數增加而直接暴增 4 倍。
+      將 bit 設為 0 會讓原本為 1 的位置變成 0。根據查詢邏輯，只要有一個位置為 0 就會判定為「絕對不存在」。因此，刪除操作會導致原本存在的資料被判定為不存在（false negative），而非增加誤判存在的機率（false positive）。

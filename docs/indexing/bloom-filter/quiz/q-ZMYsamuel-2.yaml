@@ -1,18 +1,18 @@
 author: ZMYsamuel
 date: 2026-04-02
 question: |
-  在評估是否將系統中的標準 **bloom filter** 遷移至 **cuckoo filter** 時，工程師列出了幾項關鍵的架構差異。下列哪一個分析最符合 filter 的設計邏輯？
+  工程師在優化 LSM-tree 的讀取效能時，考慮將現有每個元素的位元分配（$m/n$）從 15 提升至 25。關於 **diminishing return** 的描述與 Bloom filter 的基本性質，下列哪一個判斷最符合工程實務上的權衡？
 options:
-  - text: "cuckoo filter 每次查詢僅需固定檢查 2 個位置，相較於 bloom filter 需要 $k$ 次隨機存取對 cache 更友善，且原生支援刪除操作。"
+  - text: "不建議使用此更動。因為當 $m/n$ 超過 15 之後，再增加記憶體對降低 FPR 的邊際效益會顯著遞減，且仍無法消除 false positive。"
     correct: true
     explanation: |
-      這是 cuckoo filter 的主要優勢。大抄提到它透過儲存 fingerprint 並使用 cuckoo hashing，使每次查詢只需檢查 2 個位置，比 bloom filter 的 $k$ 次 random access 更快且對 cache 友善。此外，它能精確移除特定元素的 fingerprint，因此額外支援了刪除操作。
-  - text: "cuckoo filter 因為儲存了 fingerprint，在相同的空間成本下其 FPR 遠低於 bloom filter，且能保證在高負載下依然永遠插入成功。"
+      從 $m/n = 10$ 增加到 15 時，FPR 會從 0.82% 降至 0.03%（降幅達 27 倍）；但從 15 再往上增加（如至 20 以上），FPR 的下降幅度會變得很小。在記憶體資源有限的儲存系統中，這類高 $m/n$ 的配置通常不具效益。此外，Bloom filter 是機率性結構，無論 $m$ 多大都無法達到 100% 準確率。
+  - text: "建議使用此更動。因為 $m/n$ 與 FPR 呈線性反比關係，將空間提升至 25 bits 將能直接減少約 60% 的誤判率，進一步保護 disk。"
     explanation: |
-      在相同的 FPR 下，cuckoo filter 的空間效率與 bloom filter 差不多，並非遠低於。此外，cuckoo filter 有容量上限，當結構塞太滿時，插入操作可能會失敗，這點與 bloom filter「永遠能插入」的特性不同。
-  - text: "cuckoo filter 為了支援刪除操作，其記憶體消耗量與 **counting bloom filter** 相當，皆為標準 bloom filter 的 4 倍以上。"
+      FPR 與 $m/n$ 並非簡單的線性關係，而是呈指數級變化的。雖然增加空間能降低 FPR，但跨過特定門檻（如大抄提到的 15）後，每一單位的記憶體投資所換取的 FPR 降幅會快速縮小，並非單純的線性減少。
+  - text: "不建議使用此更動。因為增加位元陣列大小 $m$ 會導致最佳的雜湊函數數量 $k$ 隨之增加，進而引發 false negative 的風險。"
     explanation: |
-      cuckoo filter 的空間效率與 bloom filter 差不多。只有 counting bloom filter 為了將 bit 換成 counter（通常 4 bits），才會導致記憶體用量增加為標準版的 4 倍。
-  - text: "雖然 cuckoo filter 支援刪除，但其運作邏輯與標準 bloom filter 相同，皆是透過將對應位置的位元歸零來移除元素，因此仍存在 false negative 的風險。"
+      增加 $m$ 確實會使最佳的 $k$ 值隨之增加（$k \approx 0.693 \times m/n$），這會稍微增加 CPU 運算成本，但 **false negative** 是由「刪除位元」或「硬體錯誤」導致的。增加位元陣列空間本身絕不會導致原本存在的資料被判定為不存在。
+  - text: "建議使用此更動。因為即使 $m/n$ 提升至 25，其總體記憶體消耗仍遠低於傳統 hash set，且能同時滿足支援刪除操作的需求。"
     explanation: |
-      cuckoo filter 支援刪除是因為它存儲了 fingerprint，可以精確移除特定元素的紀錄而不影響其他元素。大抄提到標準 bloom filter 不能刪除是因為多個元素會共享同一個 bit，若將其設為 0 會導致 false negative，這正是 cuckoo filter 試圖解決的問題。
+      雖然 Bloom filter 的空間效率確實仍優於 hash set（17 倍以上差距），但增加空間並不能解決標準版不支援刪除的問題。不支援刪除是源於位元共享（collision）的結構本質，而非空間配置不足。

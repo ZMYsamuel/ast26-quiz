@@ -1,0 +1,18 @@
+author: ZMYsamuel
+date: 2026-04-02
+question: |
+  在評估是否將系統中的標準 **bloom filter** 遷移至 **cuckoo filter** 時，工程師列出了幾項關鍵的架構差異。下列哪一個分析最符合 filter 的設計邏輯？
+options:
+  - text: "cuckoo filter 每次查詢僅需固定檢查 2 個位置，相較於 bloom filter 需要 $k$ 次隨機存取對 cache 更友善，且原生支援刪除操作。"
+    correct: true
+    explanation: |
+      這是 cuckoo filter 的主要優勢。大抄提到它透過儲存 fingerprint 並使用 cuckoo hashing，使每次查詢只需檢查 2 個位置，比 bloom filter 的 $k$ 次 random access 更快且對 cache 友善。此外，它能精確移除特定元素的 fingerprint，因此額外支援了刪除操作。
+  - text: "cuckoo filter 因為儲存了 fingerprint，在相同的空間成本下其 FPR 遠低於 bloom filter，且能保證在高負載下依然永遠插入成功。"
+    explanation: |
+      在相同的 FPR 下，cuckoo filter 的空間效率與 bloom filter 差不多，並非遠低於。此外，cuckoo filter 有容量上限，當結構塞太滿時，插入操作可能會失敗，這點與 bloom filter「永遠能插入」的特性不同。
+  - text: "cuckoo filter 為了支援刪除操作，其記憶體消耗量與 **counting bloom filter** 相當，皆為標準 bloom filter 的 4 倍以上。"
+    explanation: |
+      cuckoo filter 的空間效率與 bloom filter 差不多。只有 counting bloom filter 為了將 bit 換成 counter（通常 4 bits），才會導致記憶體用量增加為標準版的 4 倍。
+  - text: "雖然 cuckoo filter 支援刪除，但其運作邏輯與標準 bloom filter 相同，皆是透過將對應位置的位元歸零來移除元素，因此仍存在 false negative 的風險。"
+    explanation: |
+      cuckoo filter 支援刪除是因為它存儲了 fingerprint，可以精確移除特定元素的紀錄而不影響其他元素。大抄提到標準 bloom filter 不能刪除是因為多個元素會共享同一個 bit，若將其設為 0 會導致 false negative，這正是 cuckoo filter 試圖解決的問題。

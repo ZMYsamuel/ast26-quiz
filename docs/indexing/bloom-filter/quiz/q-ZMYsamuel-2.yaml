@@ -1,7 +1,7 @@
 author: ZMYsamuel
 date: 2026-04-02
 question: |
-  工程師在優化 LSM-tree 的讀取效能時，考慮將現有每個元素的位元分配（$m/n$）從 15 提升至 25。關於 **diminishing return** 的描述與 Bloom filter 的基本性質，下列哪一個判斷最符合工程實務上的權衡？
+  工程師在優化 LSM-tree 的讀取效能時，考慮將現有每個元素的位元分配（$m/n$）從 15 提升至 25。下列哪一個判斷最符合工程實務上的權衡？
 options:
   - text: "不建議使用此更動。因為當 $m/n$ 超過 15 之後，再增加記憶體對降低 FPR 的邊際效益會顯著遞減，且仍無法消除 false positive。"
     correct: true
